@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>My Charts</title><meta name="theme-color" content="#0f1620">
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css"></head><body>
+<aside id="side"><h1>My Charts</h1><input id="search" type="search" placeholder="Search symbol" aria-label="Search symbol"><ul id="list"></ul></aside>
+<main id="main">
+<header><button id="menu">Symbols</button><strong id="name"></strong><span id="status" role="status"></span><button id="full">Full screen</button></header>
+<nav id="tfs"></nav>
+<nav id="tools">
+<select id="type" aria-label="Chart type"><option value="candle">Candles</option><option value="line">Line</option><option value="area">Area</option></select>
+<span id="inds"></span>
+<select id="draw" aria-label="Drawing tool"><option value="">Draw: off</option><option value="h">Horizontal line</option><option value="t">Trend line</option><option value="r">Rectangle</option><option value="f">Fibonacci</option></select>
+<button id="undo">Undo drawing</button><button id="clear">Clear drawings</button><button id="alert">Add alert</button></nav>
+<div id="alerts"></div>
+<div id="wrap"><div id="chart"></div><canvas id="layer"></canvas><div id="tv"></div></div>
+<footer id="credit">Times are EAT (UTC+3). Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a> Lightweight Charts™, Copyright © TradingView, Inc. Crypto data: Binance.</footer>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
+<script src="app.js"></script></body></html>
