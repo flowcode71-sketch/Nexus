@@ -28,3 +28,4 @@ footer{font-size:11px;color:var(--dim);padding:6px 8px}a{color:var(--gold)}
 @media(max-width:760px){#menu{display:block}aside{display:none;position:fixed;inset:0;width:100%;z-index:30;padding-top:calc(12px + env(safe-area-inset-top))}aside.open{display:block}}
 
 #satsdash{position:absolute;top:6px;left:6px;z-index:4;display:grid;grid-template-columns:auto auto;gap:1px 10px;padding:6px 8px;background:#17212ee6;border:1px solid var(--line);border-radius:6px;font-size:11px;pointer-events:none}
+#note{font-size:12px;color:var(--gold);padding:0 8px}

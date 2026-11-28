@@ -6,6 +6,7 @@
 <aside id="side"><h1>My Charts</h1><input id="search" type="search" placeholder="Search symbol" aria-label="Search symbol"><ul id="list"></ul></aside>
 <main id="main">
 <header><button id="menu">Symbols</button><strong id="name"></strong><span id="status" role="status"></span><button id="full">Full screen</button></header>
+<div id="note" hidden>Gold perpetual, may differ from broker XAUUSD</div>
 <nav id="tfs"></nav>
 <nav id="tools">
 <select id="type" aria-label="Chart type"><option value="candle">Candles</option><option value="line">Line</option><option value="area">Area</option></select>
@@ -14,7 +15,7 @@
 <button id="undo">Undo drawing</button><button id="clear">Clear drawings</button><button id="alert">Add alert</button></nav>
 <div id="alerts"></div>
 <div id="wrap"><div id="chart"></div><canvas id="layer"></canvas><div id="tv"></div><div id="satsdash" hidden></div></div>
-<footer id="credit">Times are EAT (UTC+3). Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a> Lightweight Charts™, Copyright © TradingView, Inc. Crypto data: Binance.</footer>
+<footer id="credit">Times are EAT (UTC+3). Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noopener">TradingView</a> Lightweight Charts™, Copyright © TradingView, Inc. Crypto data: Binance. Gold data: Hyperliquid.</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 <script src="app.js"></script><script src="sats.js"></script></body></html>

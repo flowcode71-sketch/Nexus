@@ -16,7 +16,9 @@ let sym = load('sym', 'BTCUSDT'), tf = load('tf', '1H');
 let favs = load('favs', []), on = load('ind', ['Volume']), drawings = load('draw', {}), alerts = load('alerts', []);
 let bars = [], chart, main, series = {}, ws, retry = 0, timer, lastMsg = 0, gen = 0, pending = null, audio, dirty = false;
 const last = {};
-const isCrypto = () => CRYPTO.includes(sym);
+const GOLD = 'XAUUSD', COIN = 'xyz:GOLD', HL = 'https://api.hyperliquid.xyz/info';
+const isOwn = () => CRYPTO.includes(sym) || sym === GOLD;
+let gws, gtimer, gretry = 0, goldMsg = 0, goldCandle = 0;
 
 function status(text, cls = '') { $('status').textContent = text; $('status').className = cls; }
 
@@ -110,16 +112,21 @@ async function history() {
   const g = ++gen, s = sym;
   status('Loading', 'warn');
   try {
-    const r = await fetch(`${REST}?symbol=${s}&interval=${TF[tf][0]}&limit=1000`, { signal: AbortSignal.timeout(15000) });
-    if (!r.ok) throw new Error('Binance returned HTTP ' + r.status);
+    const signal = AbortSignal.timeout(15000), now = Date.now();
+    const r = s === GOLD
+      ? await fetch(HL, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'candleSnapshot', req: { coin: COIN, interval: TF[tf][0], startTime: now - TF[tf][2] * 1e6, endTime: now } }) })
+      : await fetch(`${REST}?symbol=${s}&interval=${TF[tf][0]}&limit=1000`, { signal });
+    if (!r.ok) throw new Error((s === GOLD ? 'Hyperliquid' : 'Binance') + ' returned HTTP ' + r.status);
     const rows = await r.json();
     if (g !== gen) return;
-    bars = rows.map(k => toBar(k[0], k[1], k[2], k[3], k[4], k[5]));
+    if (!rows?.length) throw new Error('no candles returned');
+    bars = rows.map(k => s === GOLD ? toBar(k.t, k.o, k.h, k.l, k.c, k.v) : toBar(k[0], k[1], k[2], k[3], k[4], k[5]));
     buildChart();
   } catch (e) {
     if (g !== gen) return;
     status('Error: ' + e.message + '. Retrying.', 'err');
-    setTimeout(() => g === gen && isCrypto() && history(), 5000);
+    setTimeout(() => g === gen && history(), 5000);
   }
 }
 
@@ -127,10 +134,10 @@ function connect() {
   clearTimeout(timer);
   if (ws) { ws.onclose = null; ws.close(); }
   const streams = CRYPTO.map(s => s.toLowerCase() + '@miniTicker');
-  if (isCrypto()) streams.push(`${sym.toLowerCase()}@kline_${TF[tf][0]}`);
+  if (CRYPTO.includes(sym)) streams.push(`${sym.toLowerCase()}@kline_${TF[tf][0]}`);
   ws = new WebSocket(WS + streams.join('/'));
   lastMsg = Date.now();
-  ws.onopen = () => { if (retry && isCrypto()) history(); retry = 0; };
+  ws.onopen = () => { if (retry && CRYPTO.includes(sym)) history(); retry = 0; };
   ws.onmessage = e => {
     const d = JSON.parse(e.data).data;
     lastMsg = Date.now();
@@ -148,17 +155,58 @@ function connect() {
   };
   ws.onclose = () => {
     const wait = Math.min(30, 2 ** retry++);
-    if (isCrypto()) status(`Error: connection lost. Retrying in ${wait}s`, 'err');
+    if (CRYPTO.includes(sym)) status(`Error: connection lost. Retrying in ${wait}s`, 'err');
     timer = setTimeout(connect, wait * 1000);
   };
 }
+
+function connectGold() { // always on, so gold alerts work from any symbol
+  clearTimeout(gtimer);
+  if (gws) { gws.onclose = null; gws.close(); }
+  const sock = gws = new WebSocket('wss://api.hyperliquid.xyz/ws');
+  goldMsg = Date.now(); goldCandle = 0;
+  sock.onopen = () => {
+    new Set(['1m', sym === GOLD ? TF[tf][0] : '1m']).forEach(interval => sock.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'candle', coin: COIN, interval } })));
+    if (gretry && sym === GOLD) history();
+    gretry = 0;
+  };
+  sock.onmessage = e => {
+    const m = JSON.parse(e.data); goldMsg = Date.now();
+    if (m.channel === 'error' && sym === GOLD) return status('Error: ' + m.data, 'err');
+    if (m.channel !== 'candle' || m.data.s !== COIN) return;
+    const k = m.data, price = +k.c;
+    goldCandle = Date.now();
+    if (k.i === '1m' && k.T > Date.now() - 60000) {
+      last[GOLD] = price; checkAlerts(GOLD, price);
+      const el = document.querySelector(`[data-price="${GOLD}"]`);
+      if (el) el.textContent = price.toLocaleString('en');
+    }
+    if (sym !== GOLD || k.i !== TF[tf][0] || !chart || !bars.length) return;
+    const b = toBar(k.t, k.o, k.h, k.l, k.c, k.v), end = bars[bars.length - 1];
+    if (b.t < end.t) return;
+    b.t === end.t ? bars[bars.length - 1] = b : bars.push(b);
+    main.update(priceRow(b)); dirty = true;
+  };
+  sock.onclose = () => {
+    const wait = Math.min(30, 2 ** gretry++);
+    if (sym === GOLD) status(`Error: connection lost. Retrying in ${wait}s`, 'err');
+    gtimer = setTimeout(connectGold, wait * 1000);
+  };
+}
+setInterval(() => {
+  if (gws?.readyState !== 1) return;
+  if (Date.now() - goldMsg > 75000) { gretry ||= 1; gws.close(); } else gws.send('{"method":"ping"}');
+}, 30000);
 
 setInterval(() => {
   if (dirty) { dirty = false; paint(false); }
   const age = (Date.now() - lastMsg) / 1000;
   if (age > 60 && ws && ws.readyState < 2) { retry = retry || 1; ws.close(); }
-  if (!isCrypto() || !bars.length || !ws || ws.readyState !== 1) return;
-  age < 15 ? status('Live', 'live') : status(`Delayed: no update for ${Math.round(age)}s`, 'warn');
+  const gold = sym === GOLD;
+  if (!isOwn() || !bars.length || (gold ? gws : ws)?.readyState !== 1) return;
+  if (gold && !goldCandle) return status('Delayed: waiting for a gold update', 'warn');
+  const quiet = gold ? (Date.now() - goldCandle) / 1000 : age;
+  quiet < (gold ? 60 : 15) ? status('Live', 'live') : status(`Delayed: no update for ${Math.round(quiet)}s`, 'warn');
 }, 1000);
 
 /* ---------- drawings ---------- */
@@ -197,7 +245,7 @@ function overlay() {
   if (cv.width !== Math.round(w * r) || cv.height !== Math.round(h * r)) { cv.width = Math.round(w * r); cv.height = Math.round(h * r); }
   const x = cv.getContext('2d');
   x.setTransform(r, 0, 0, r, 0, 0); x.clearRect(0, 0, w, h);
-  if (!chart || !bars.length || !isCrypto()) return;
+  if (!chart || !bars.length || !isOwn()) return;
   const W = chart.timeScale().width(), H = chart.panes()[0].getHeight();
   x.save(); x.beginPath(); x.rect(0, 0, W, H); x.clip();
   window.drawSats?.(x, W);
@@ -254,16 +302,17 @@ function showWidget() {
 function show() {
   save('sym', sym); save('tf', tf); pending = null; gen++; bars = [];
   if (chart) { chart.remove(); chart = null; }
-  const own = isCrypto();
+  const own = isOwn();
   ['chart', 'layer', 'tools', 'alerts', 'credit'].forEach(id => $(id).hidden = !own);
   $('tv').hidden = own; $('tv').replaceChildren();
   $('name').textContent = sym + ' ' + tf;
+  $('note').hidden = sym !== GOLD;
   [...$('tfs').children].forEach(b => b.classList.toggle('on', b.textContent === tf));
   list();
   if (own) {
     if (window.LightweightCharts) history(); else status('Error: chart library did not load. Reload the page.', 'err');
   } else { status('Status shown by TradingView'); showWidget(); }
-  retry = 0; connect();
+  retry = 0; connect(); gretry = 0; connectGold();
 }
 function button(text, cls, click) { const b = document.createElement('button'); b.textContent = text; b.className = cls; b.onclick = click; return b; }
 function list() {
@@ -309,7 +358,8 @@ document.onfullscreenchange = () => { if (!document.fullscreenElement) { $('main
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 addEventListener('online', () => show());
 addEventListener('offline', () => status('Error: you are offline', 'err'));
-document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastMsg > 15000) { retry = 1; connect(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastMsg > 15000) { retry = 1; connect(); }
+  if (!document.hidden && Date.now() - goldMsg > 45000) { gretry = 1; connectGold(); } });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 if (!SYMBOLS.includes(sym)) sym = 'BTCUSDT';
 if (!TF[tf]) tf = '1H';

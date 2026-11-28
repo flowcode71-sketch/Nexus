@@ -1,5 +1,5 @@
 // Network first for this site's own files only. Price data is never cached.
-const CACHE = 'my-charts-v4';
+const CACHE = 'my-charts-v5';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'sats.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); });
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));

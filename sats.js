@@ -94,7 +94,7 @@ function satsCalc(B, tfSec, presetName, tick = 0.01) {
 
 let sats, satsKey = '', satsSeen = '';
 function satsUpdate() {
-  const show = cfg.on && isCrypto() && bars.length > 1;
+  const show = cfg.on && isOwn() && bars.length > 1;
   $('satsdash').hidden = !show || !cfg.dash;
   if (!show) { sats = null; satsKey = ''; return; }
   const closed = bars.slice(0, -1), id = `${sym}|${tf}|${cfg.preset}`, key = `${id}|${closed.at(-1).t}`;
