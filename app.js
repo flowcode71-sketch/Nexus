@@ -200,6 +200,7 @@ function overlay() {
   if (!chart || !bars.length || !isCrypto()) return;
   const W = chart.timeScale().width(), H = chart.panes()[0].getHeight();
   x.save(); x.beginPath(); x.rect(0, 0, W, H); x.clip();
+  window.drawSats?.(x, W);
   x.strokeStyle = x.fillStyle = '#e0a93b'; x.font = '11px system-ui';
   const line = (a, b, c, d) => { x.beginPath(); x.moveTo(a, b); x.lineTo(c, d); x.stroke(); };
   for (const d of drawings[sym] || []) {
