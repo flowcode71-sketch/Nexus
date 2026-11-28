@@ -14,9 +14,10 @@ Android/desktop Chrome: menu > Install app (or Add to Home screen). iPhone Safar
 ## What works where
 - **BTC, ETH:** Binance data, indicators, saved drawings, price alerts, status, SATS.
 - **Gold:** the same tools, using the Hyperliquid xyz:GOLD perpetual. It may differ from broker XAUUSD.
+- **NAS100:** the same tools, using the Hyperliquid xyz:XYZ100 perpetual (an index of 100 large non-financial US stocks). It is not the official Nasdaq-100 or your broker price.
 - **Forex:** TradingView widget with its own tools. Site alerts and SATS do not apply.
 
-## SATS indicator (BTC, ETH, gold)
+## SATS indicator (BTC, ETH, gold, NAS100)
 Partial port of "Self-Aware Trend System" v1.17.3 by Willy | WillyAlgoTrader, default settings: presets, quality-adaptive bands, character flips, scored Buy/Sell labels, entry/SL/TP1-3 and a panel. Closed candles only, about 1,000 loaded. Not included: input editing beyond preset, grades, dynamic TP, breakeven, re-entry, self-learning, fees/slippage, next-bar entry, trader card, webhooks. Results can differ from TradingView. Not available on forex widgets.
 
 ## Limits

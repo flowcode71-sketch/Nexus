@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const REST = 'https://data-api.binance.vision/api/v3/klines';
 const WS = 'wss://data-stream.binance.vision/stream?streams=';
 const CRYPTO = ['BTCUSDT', 'ETHUSDT'];
-const SYMBOLS = [...CRYPTO, 'XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURJPY', 'GBPJPY'];
+const SYMBOLS = [...CRYPTO, 'XAUUSD', 'NAS100', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD', 'EURJPY', 'GBPJPY'];
 // label: [Binance interval, TradingView interval, seconds]
 const TF = {'1m':['1m','1',60],'5m':['5m','5',300],'15m':['15m','15',900],'30m':['30m','30',1800],'1H':['1h','60',3600],'4H':['4h','240',14400],'1D':['1d','D',86400],'1W':['1w','W',604800]};
 const IND = ['EMA 20','SMA 50','Bollinger','RSI','MACD','ATR','Volume','VWAP'];
@@ -16,8 +16,8 @@ let sym = load('sym', 'BTCUSDT'), tf = load('tf', '1H');
 let favs = load('favs', []), on = load('ind', ['Volume']), drawings = load('draw', {}), alerts = load('alerts', []);
 let bars = [], chart, main, series = {}, ws, retry = 0, timer, lastMsg = 0, gen = 0, pending = null, audio, dirty = false;
 const last = {};
-const GOLD = 'XAUUSD', COIN = 'xyz:GOLD', HL = 'https://api.hyperliquid.xyz/info';
-const isOwn = () => CRYPTO.includes(sym) || sym === GOLD;
+const HLC = { XAUUSD: 'xyz:GOLD', NAS100: 'xyz:XYZ100' }, HL = 'https://api.hyperliquid.xyz/info';
+const isOwn = () => CRYPTO.includes(sym) || sym in HLC;
 let gws, gtimer, gretry = 0, goldMsg = 0, goldCandle = 0;
 
 function status(text, cls = '') { $('status').textContent = text; $('status').className = cls; }
@@ -113,15 +113,15 @@ async function history() {
   status('Loading', 'warn');
   try {
     const signal = AbortSignal.timeout(15000), now = Date.now();
-    const r = s === GOLD
+    const r = s in HLC
       ? await fetch(HL, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'candleSnapshot', req: { coin: COIN, interval: TF[tf][0], startTime: now - TF[tf][2] * 1e6, endTime: now } }) })
+          body: JSON.stringify({ type: 'candleSnapshot', req: { coin: HLC[s], interval: TF[tf][0], startTime: now - TF[tf][2] * 1e6, endTime: now } }) })
       : await fetch(`${REST}?symbol=${s}&interval=${TF[tf][0]}&limit=1000`, { signal });
-    if (!r.ok) throw new Error((s === GOLD ? 'Hyperliquid' : 'Binance') + ' returned HTTP ' + r.status);
+    if (!r.ok) throw new Error((s in HLC ? 'Hyperliquid' : 'Binance') + ' returned HTTP ' + r.status);
     const rows = await r.json();
     if (g !== gen) return;
     if (!rows?.length) throw new Error('no candles returned');
-    bars = rows.map(k => s === GOLD ? toBar(k.t, k.o, k.h, k.l, k.c, k.v) : toBar(k[0], k[1], k[2], k[3], k[4], k[5]));
+    bars = rows.map(k => s in HLC ? toBar(k.t, k.o, k.h, k.l, k.c, k.v) : toBar(k[0], k[1], k[2], k[3], k[4], k[5]));
     buildChart();
   } catch (e) {
     if (g !== gen) return;
@@ -166,22 +166,23 @@ function connectGold() { // always on, so gold alerts work from any symbol
   const sock = gws = new WebSocket('wss://api.hyperliquid.xyz/ws');
   goldMsg = Date.now(); goldCandle = 0;
   sock.onopen = () => {
-    new Set(['1m', sym === GOLD ? TF[tf][0] : '1m']).forEach(interval => sock.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'candle', coin: COIN, interval } })));
-    if (gretry && sym === GOLD) history();
+    Object.entries(HLC).forEach(([s, coin]) => new Set(['1m', s === sym ? TF[tf][0] : '1m']).forEach(interval => sock.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'candle', coin, interval } }))));
+    if (gretry && sym in HLC) history();
     gretry = 0;
   };
   sock.onmessage = e => {
     const m = JSON.parse(e.data); goldMsg = Date.now();
-    if (m.channel === 'error' && sym === GOLD) return status('Error: ' + m.data, 'err');
-    if (m.channel !== 'candle' || m.data.s !== COIN) return;
+    if (m.channel === 'error' && sym in HLC) return status('Error: ' + m.data, 'err');
+    const name = m.channel === 'candle' && Object.keys(HLC).find(s => HLC[s] === m.data.s);
+    if (!name) return;
     const k = m.data, price = +k.c;
-    goldCandle = Date.now();
+    if (name === sym) goldCandle = Date.now();
     if (k.i === '1m' && k.T > Date.now() - 60000) {
-      last[GOLD] = price; checkAlerts(GOLD, price);
-      const el = document.querySelector(`[data-price="${GOLD}"]`);
+      last[name] = price; checkAlerts(name, price);
+      const el = document.querySelector(`[data-price="${name}"]`);
       if (el) el.textContent = price.toLocaleString('en');
     }
-    if (sym !== GOLD || k.i !== TF[tf][0] || !chart || !bars.length) return;
+    if (name !== sym || k.i !== TF[tf][0] || !chart || !bars.length) return;
     const b = toBar(k.t, k.o, k.h, k.l, k.c, k.v), end = bars[bars.length - 1];
     if (b.t < end.t) return;
     b.t === end.t ? bars[bars.length - 1] = b : bars.push(b);
@@ -189,7 +190,7 @@ function connectGold() { // always on, so gold alerts work from any symbol
   };
   sock.onclose = () => {
     const wait = Math.min(30, 2 ** gretry++);
-    if (sym === GOLD) status(`Error: connection lost. Retrying in ${wait}s`, 'err');
+    if (sym in HLC) status(`Error: connection lost. Retrying in ${wait}s`, 'err');
     gtimer = setTimeout(connectGold, wait * 1000);
   };
 }
@@ -202,9 +203,9 @@ setInterval(() => {
   if (dirty) { dirty = false; paint(false); }
   const age = (Date.now() - lastMsg) / 1000;
   if (age > 60 && ws && ws.readyState < 2) { retry = retry || 1; ws.close(); }
-  const gold = sym === GOLD;
+  const gold = sym in HLC;
   if (!isOwn() || !bars.length || (gold ? gws : ws)?.readyState !== 1) return;
-  if (gold && !goldCandle) return status('Delayed: waiting for a gold update', 'warn');
+  if (gold && !goldCandle) return status('Delayed: waiting for an update', 'warn');
   const quiet = gold ? (Date.now() - goldCandle) / 1000 : age;
   quiet < (gold ? 60 : 15) ? status('Live', 'live') : status(`Delayed: no update for ${Math.round(quiet)}s`, 'warn');
 }, 1000);
@@ -306,7 +307,8 @@ function show() {
   ['chart', 'layer', 'tools', 'alerts', 'credit'].forEach(id => $(id).hidden = !own);
   $('tv').hidden = own; $('tv').replaceChildren();
   $('name').textContent = sym + ' ' + tf;
-  $('note').hidden = sym !== GOLD;
+  $('note').hidden = !(sym in HLC);
+  $('note').textContent = sym === 'NAS100' ? 'US 100 perpetual (XYZ100), may differ from broker NAS100' : 'Gold perpetual, may differ from broker XAUUSD';
   [...$('tfs').children].forEach(b => b.classList.toggle('on', b.textContent === tf));
   list();
   if (own) {
@@ -316,7 +318,7 @@ function show() {
 }
 function button(text, cls, click) { const b = document.createElement('button'); b.textContent = text; b.className = cls; b.onclick = click; return b; }
 function list() {
-  const q = $('search').value.toUpperCase().replace(/[^A-Z]/g, '');
+  const q = $('search').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
   const shown = SYMBOLS.filter(s => s.includes(q)).sort((a, b) => favs.includes(b) - favs.includes(a));
   $('list').replaceChildren(...shown.map(s => {
     const li = document.createElement('li');
